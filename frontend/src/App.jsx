@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import { Leaf, BarChart2, ShoppingCart, Archive, BookOpen, Plus, CreditCard, FileText, Calendar, Scissors, ArrowLeft, ArrowRight, AlertTriangle, Phone as PhoneIcon, MapPin, Printer, CheckCircle, DollarSign, X as XIcon, Receipt } from 'lucide-react'
+import Expenses from './pages/Expenses'
 
 function App() {
   // --- NAVIGATION STATE ---
@@ -324,6 +326,7 @@ function App() {
           <MenuButton label="🛒 Shop Stock" active={activeTab === 'shop'} onClick={() => setActiveTab('shop')} />
           <MenuButton label="🏭 Godown Stock" active={activeTab === 'godown'} onClick={() => setActiveTab('godown')} />
           <MenuButton label="📖 Khata Book" active={activeTab === 'khata'} onClick={() => setActiveTab('khata')} />
+          <MenuButton icon={Receipt} label="💸 Expenses" active={activeTab === 'expenses'} onClick={() => setActiveTab('expenses')} />
           <MenuButton label="➕ Manage Items" active={activeTab === 'manage'} onClick={() => setActiveTab('manage')} />
           <MenuButton label="💰 Billing (POS)" active={activeTab === 'billing'} onClick={() => setActiveTab('billing')} />
         </nav>
@@ -426,8 +429,8 @@ function App() {
                     </div>
                     </div>
                   <div className="mt-4 pt-4 border-t flex justify-between items-center">
-                    <span className={`px-2 py-1 rounded text-xs font-bold ${loan.status === 'CLOSED' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{loan.status}</span>
-                    <div className="flex items-center gap-3">
+                          <span className={`px-2 py-1 rounded text-xs font-bold ${loan.status === 'CLOSED' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>{loan.status}</span>
+                          <div className="flex items-center gap-3">
                       <button onClick={() => setSelectedLoan(loan)} className="text-blue-600 text-sm font-bold">View & Pay ➡</button>
                       <button onClick={async (e) => {
                         e.stopPropagation();
@@ -445,7 +448,7 @@ function App() {
                           alert(`Delete failed: ${err.message || err}`);
                         }
                       }} className="text-red-600 text-sm font-semibold hover:underline">Delete</button>
-                    </div>
+                  </div>
                   </div>
                 </div>
               ))}
@@ -500,7 +503,7 @@ function App() {
                       <div className="border rounded p-3 bg-gray-50">
                         <h4 className="font-bold text-gray-700 mb-2 border-b pb-1">✅ Payment History</h4>
                         <div className="space-y-2 text-sm max-h-48 overflow-y-auto">
-                           {selectedLoan.payments && selectedLoan.payments.map(p => (
+                          {selectedLoan.payments && selectedLoan.payments.map(p => (
                             <div key={p.id} className="flex justify-between border-b pb-1 last:border-0">
                               <span>{new Date(p.date).toLocaleDateString()} ({p.note})</span>
                               <span className="font-bold text-green-600 whitespace-nowrap">-₹{p.amount}</span>
@@ -528,6 +531,11 @@ function App() {
         )}
 
         {/* BILLING (POS) */}
+        {activeTab === 'expenses' && (
+          <div className="max-w-6xl mx-auto">
+            <Expenses />
+          </div>
+        )}
         {activeTab === 'billing' && (
           <div className="max-w-4xl mx-auto">
             {lastSale ? (
