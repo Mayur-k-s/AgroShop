@@ -41,20 +41,15 @@ class Sale(models.Model):
 
 class SaleItem(models.Model):
     sale = models.ForeignKey(Sale, on_delete=models.CASCADE)
-    # CHANGE 1: If Batch is deleted, keep this row (set to NULL)
     batch = models.ForeignKey(Batch, on_delete=models.SET_NULL, null=True) 
-    
     quantity_sold = models.DecimalField(max_digits=10, decimal_places=2)
     selling_price = models.DecimalField(max_digits=10, decimal_places=2)
     cost_price_snapshot = models.DecimalField(max_digits=10, decimal_places=2, null=True)
     is_loose_sale = models.BooleanField(default=False)
-    
-    # CHANGE 2: Remember the name forever
     product_name_snapshot = models.CharField(max_length=200, blank=True, null=True)
     category_snapshot = models.CharField(max_length=100, blank=True, null=True)
 
     def save(self, *args, **kwargs):
-        # When saving, take a "photo" of the name and category
         if self.batch:
             if not self.cost_price_snapshot:
                 self.cost_price_snapshot = self.batch.purchase_price
@@ -62,18 +57,27 @@ class SaleItem(models.Model):
                 self.product_name_snapshot = self.batch.variant.product.name
             if not self.category_snapshot:
                 self.category_snapshot = self.batch.variant.product.category.name
-        
         super().save(*args, **kwargs)
 
+# --- MISSING EXPENSE MODEL RESTORED ---
+class Expense(models.Model):
+    CATEGORY_CHOICES = [
+        ('Transport', 'Transport'),
+        ('Wages', 'Wages'),
+        ('Bills', 'Bills (EB/Water)'),
+        ('Extra', 'Extra'),
+    ]
+    category = models.CharField(max_length=50, choices=CATEGORY_CHOICES)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    note = models.CharField(max_length=300, blank=True)
+    date = models.DateTimeField(default=timezone.now)
 
 class Customer(models.Model):
     name = models.CharField(max_length=200)
     phone = models.CharField(max_length=20, blank=True, null=True)
     address = models.CharField(max_length=500, blank=True, null=True)
     created_at = models.DateTimeField(default=timezone.now)
-    def __str__(self):
-        return f"{self.name} ({self.phone})"
-
+    def __str__(self): return f"{self.name} ({self.phone})"
 
 class Loan(models.Model):
     STATUS_CHOICES = [('OPEN', 'Open'), ('CLOSED', 'Closed')]
@@ -83,14 +87,9 @@ class Loan(models.Model):
     description = models.TextField(blank=True, null=True)
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='OPEN')
     created_at = models.DateTimeField(default=timezone.now)
-    def __str__(self):
-        return f"Loan #{self.id} - {self.customer.name} - {self.outstanding}"
-
 
 class LoanPayment(models.Model):
     loan = models.ForeignKey(Loan, on_delete=models.CASCADE, related_name='payments')
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     note = models.CharField(max_length=200, blank=True, null=True)
     payment_date = models.DateTimeField(default=timezone.now)
-    def __str__(self):
-        return f"Payment #{self.id} - Loan {self.loan.id} - {self.amount}"

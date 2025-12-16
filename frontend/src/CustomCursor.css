@@ -1,0 +1,43 @@
+/* CustomCursor.css */
+body {
+  cursor: none; /* Hide default cursor */
+}
+
+/* The small dot (pointer) */
+.cursor-dot {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 8px;
+  height: 8px;
+  background-color: #4ade80; /* bright green */
+  border-radius: 50%;
+  z-index: 9999;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 10px #4ade80;
+}
+
+/* The larger trailing circle */
+.cursor-ball {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 40px;
+  height: 40px;
+  border: 1px solid rgba(74, 222, 128, 0.5); /* green opacity */
+  border-radius: 50%;
+  z-index: 9998;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  transition: width 0.3s, height 0.3s, background-color 0.3s;
+}
+
+/* Effect when hovering over interactive elements */
+.cursor-ball.hovering {
+  width: 60px;
+  height: 60px;
+  background-color: rgba(74, 222, 128, 0.1);
+  border-color: transparent;
+  backdrop-filter: blur(2px);
+}

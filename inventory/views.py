@@ -1,8 +1,9 @@
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from .models import Category, Product, ProductVariant, Batch, ShopStock, GodownStock, Sale, SaleItem
+from .models import Category, Product, ProductVariant, Batch, ShopStock, GodownStock, Sale, SaleItem, Expense
 from .models import Customer, Loan, LoanPayment
 from django.db.models import Sum
+from django.db.models.functions import TruncYear, TruncMonth, TruncWeek
 from decimal import Decimal
 from django.utils import timezone
 from django.db import transaction
@@ -17,6 +18,13 @@ def api_dashboard_data(request):
         "total_products": Product.objects.count(),
         "total_batches": Batch.objects.count()
     })
+
+@api_view(['GET'])
+def get_customers(request):
+    # Fetch all customers for POS Autocomplete
+    customers = Customer.objects.all().order_by('name')
+    data = [{"id": c.id, "name": c.name, "phone": c.phone, "address": c.address} for c in customers]
+    return Response(data)
 
 @api_view(['GET'])
 def get_shop_inventory(request):
@@ -60,21 +68,16 @@ def get_godown_inventory(request):
         })
     return Response(data)
 
-# --- UPDATED LOAN VIEW ---
 @api_view(['GET'])
 def list_loans(request):
-    # Return ALL loans (OPEN and CLOSED) so the UI can show complete history
     loans = Loan.objects.order_by('-created_at')
     data = []
     for loan in loans:
-        # Fetch sales associated with this loan to show purchase history
         related_sales = Sale.objects.filter(loan=loan).order_by('-date_time')
         sales_history = []
         for s in related_sales:
-            # Build a string of items bought in this sale
             item_names = []
             for i in SaleItem.objects.filter(sale=s):
-                # Handle deleted products gracefully using snapshots
                 p_name = i.product_name_snapshot or "Unknown Product"
                 qty = i.quantity_sold
                 unit = "Kg" if i.is_loose_sale else "Pkt"
@@ -103,7 +106,6 @@ def list_loans(request):
                 {'id': p.id, 'amount': p.amount, 'note': p.note, 'date': p.payment_date} 
                 for p in loan.payments.order_by('-payment_date')
             ],
-            # THIS IS THE KEY ADDITION FOR THE FRONTEND
             'purchase_history': sales_history
         })
     return Response(data)
@@ -120,7 +122,6 @@ def add_loan_payment(request):
         return Response({'error': 'Loan not found'}, status=404)
 
     loan.outstanding -= amount
-    # If overpaid or cleared, verify logic (simple logic: close if <= 0)
     if loan.outstanding <= 0:
         loan.outstanding = Decimal('0')
         loan.status = 'CLOSED'
@@ -129,15 +130,9 @@ def add_loan_payment(request):
     payment = LoanPayment.objects.create(loan=loan, amount=amount, note=note)
     return Response({'success': True, 'payment_id': payment.id, 'outstanding': loan.outstanding})
 
-
 @api_view(['POST'])
 @transaction.atomic
 def delete_customer_loans(request):
-    """Delete all loans and payments for a given customer.
-
-    Expected payload:
-    { "customer_id": <int> }
-    """
     data = request.data
     cust_id = data.get('customer_id')
     if not cust_id:
@@ -147,9 +142,7 @@ def delete_customer_loans(request):
     except Customer.DoesNotExist:
         return Response({'error': 'Customer not found'}, status=404)
 
-    # Find all loans for the customer
     loans = Loan.objects.filter(customer=customer)
-    # Unlink sales, delete payments and loans
     for loan in loans:
         Sale.objects.filter(loan=loan).update(loan=None)
         LoanPayment.objects.filter(loan=loan).delete()
@@ -159,62 +152,35 @@ def delete_customer_loans(request):
 
 @api_view(['GET'])
 def get_todays_report(request):
-    # Helper to calc revenue/profit for a date range
     def _calc_range(start_date, end_date):
         sales_qs = Sale.objects.filter(date_time__date__gte=start_date, date_time__date__lte=end_date)
         revenue = sales_qs.aggregate(Sum('total_amount'))['total_amount__sum'] or Decimal(0)
-        
         profit = Decimal(0)
-        # Calculate profit item by item
-        # Note: Ideally this should be optimized with annotations for large datasets
         for sale in sales_qs:
             for item in SaleItem.objects.filter(sale=sale):
-                # Selling Price
                 sp = Decimal(str(item.selling_price))
                 qty = Decimal(str(item.quantity_sold))
-                
-                # Cost Price (Use snapshot if batch deleted, else calculate from batch)
                 cp = Decimal(0)
                 if item.cost_price_snapshot:
                     cp = Decimal(str(item.cost_price_snapshot))
                 elif item.batch:
                     cp = item.batch.purchase_price
                 
-                # If loose sale, the stored CP is usually per packet. We need CP per KG.
                 if item.is_loose_sale:
                     packet_weight = Decimal('1')
                     if item.batch and item.batch.variant:
                         packet_weight = Decimal(str(item.batch.variant.volume_value))
-                    
-                    # Heuristic: if category is liquid/seed, weight might be in grams/ml
-                    # We assume the CP snapshot is "Price per Packet"
-                    # And Quantity Sold is "KG/Liters"
-                    
-                    # Convert packet weight to KG if needed (simple assumption: if val > 25, it's likely KG, else check unit logic)
-                    # For safety in this simple version, we assume packet_weight is already consistent with MRP logic
-                    # A better approach requires storing 'cost_per_unit' on SaleItem.
-                    
-                    # SIMPLIFIED PROFIT LOGIC FOR LOOSE:
-                    # We will approximate CP per unit based on standard weight (e.g. 50kg bag)
-                    # If packet is 50kg and costs 500rs, then 1kg costs 10rs.
-                    # Qty sold = 2kg. Cost = 20rs.
-                    
-                    # Handle unit conversion for 'g' or 'ml'
                     cat_name = (item.category_snapshot or "").lower()
                     if 'seed' in cat_name or 'pesticide' in cat_name:
-                         # Packet weight likely in grams/ml. Convert to Kg/L equivalent.
                          packet_weight = packet_weight / Decimal('1000')
 
                     if packet_weight > 0:
                         cp_per_unit = cp / packet_weight
                     else:
                         cp_per_unit = cp
-                        
                     profit += (sp - cp_per_unit) * qty
                 else:
-                    # Sealed Packet: Simple (SP - CP) * Qty
                     profit += (sp - cp) * qty
-
         return revenue, profit, sales_qs.count(), sales_qs
 
     def _format_history(sales_qs):
@@ -273,6 +239,94 @@ def get_setup_data(request):
     products = [{"id": p.id, "name": p.name, "manufacturer": p.manufacturer} for p in Product.objects.all()]
     variants = [{"id": v.id, "name": f"{v.product.name} ({v.size_label})", "volume": v.volume_value, "size": v.size_label} for v in ProductVariant.objects.all()]
     return Response({"categories": categories, "products": products, "variants": variants})
+
+# --- EXPENSE VIEWS ---
+
+@api_view(['GET'])
+def get_expenses(request):
+    expenses = Expense.objects.order_by('-date')[:50]
+    data = [{
+        "id": e.id, "category": e.category, "amount": e.amount, 
+        "note": e.note, "date": e.date.strftime("%d-%m-%Y")
+    } for e in expenses]
+    return Response(data)
+
+@api_view(['POST'])
+def add_expense(request):
+    data = request.data
+    Expense.objects.create(
+        category=data['category'],
+        amount=data['amount'],
+        note=data.get('note', '')
+    )
+    return Response({'success': True})
+
+# --- ANALYSIS ENGINE ---
+
+@api_view(['GET'])
+def get_analysis_data(request):
+    year = request.GET.get('year')
+    month = request.GET.get('month')
+    
+    sales_qs = Sale.objects.all()
+    expense_qs = Expense.objects.all()
+
+    if year and month:
+        sales_qs = sales_qs.filter(date_time__year=year, date_time__month=month)
+        expense_qs = expense_qs.filter(date__year=year, date__month=month)
+        sales_data = sales_qs.annotate(period=TruncWeek('date_time')).values('period').annotate(total=Sum('total_amount')).order_by('period')
+        expense_data = expense_qs.annotate(period=TruncWeek('date')).values('period').annotate(total=Sum('amount')).order_by('period')
+        mode = 'Weekly'
+    elif year:
+        sales_qs = sales_qs.filter(date_time__year=year)
+        expense_qs = expense_qs.filter(date__year=year)
+        sales_data = sales_qs.annotate(period=TruncMonth('date_time')).values('period').annotate(total=Sum('total_amount')).order_by('period')
+        expense_data = expense_qs.annotate(period=TruncMonth('date')).values('period').annotate(total=Sum('amount')).order_by('period')
+        mode = 'Monthly'
+    else:
+        sales_data = sales_qs.annotate(period=TruncYear('date_time')).values('period').annotate(total=Sum('total_amount')).order_by('period')
+        expense_data = expense_qs.annotate(period=TruncYear('date')).values('period').annotate(total=Sum('amount')).order_by('period')
+        mode = 'Yearly'
+
+    timeline = {}
+    for s in sales_data:
+        d_str = s['period'].strftime("%Y-%m-%d")
+        if d_str not in timeline: timeline[d_str] = {"revenue": 0, "expenses": 0}
+        timeline[d_str]["revenue"] = float(s['total'])
+
+    for e in expense_data:
+        d_str = e['period'].strftime("%Y-%m-%d")
+        if d_str not in timeline: timeline[d_str] = {"revenue": 0, "expenses": 0}
+        timeline[d_str]["expenses"] = float(e['total'])
+
+    chart_data = []
+    sorted_keys = sorted(timeline.keys())
+    
+    for k in sorted_keys:
+        dt = datetime.datetime.strptime(k, "%Y-%m-%d")
+        if mode == 'Yearly': label = dt.strftime("%Y")
+        elif mode == 'Monthly': label = dt.strftime("%B")
+        else: label = f"Week {dt.day}"
+
+        chart_data.append({
+            "date": k,
+            "label": label,
+            "revenue": timeline[k]["revenue"],
+            "expenses": timeline[k]["expenses"],
+            "net": timeline[k]["revenue"] - timeline[k]["expenses"]
+        })
+
+    return Response({
+        "mode": mode,
+        "year": year,
+        "month": month,
+        "data": chart_data,
+        "totals": {
+            "revenue": sum(d['revenue'] for d in chart_data),
+            "expenses": sum(d['expenses'] for d in chart_data),
+            "net": sum(d['net'] for d in chart_data),
+        }
+    })
 
 # --- WRITE DATA ---
 
@@ -443,12 +497,10 @@ def create_sale(request):
         if not phone:
              raise Exception("Customer phone required for loan")
 
-        # Create/Get Customer
         customer = Customer.objects.filter(phone=phone).first()
         if not customer:
             customer = Customer.objects.create(name=name, phone=phone, address=address)
         else:
-            # If the name/address from payload is provided and differs from stored, update it.
             updated = False
             if name and customer.name != name:
                 customer.name = name
@@ -459,8 +511,6 @@ def create_sale(request):
             if updated:
                 customer.save()
         
-        # Add Loan (Outstanding)
-        # Check if customer has an existing OPEN loan
         existing_loan = Loan.objects.filter(customer=customer, status='OPEN').first()
         if existing_loan:
             loan = existing_loan
@@ -468,8 +518,8 @@ def create_sale(request):
             loan.outstanding += total_bill
             loan.save()
         else:
-            # Create a new loan if there is no open loan for the customer
             loan = Loan.objects.create(customer=customer, total_amount=total_bill, outstanding=total_bill, description=loan_data.get('description', ''))
+        
         initial_payment = loan_data.get('initial_payment', 0)
         try:
             initial_payment = Decimal(str(initial_payment))
@@ -484,7 +534,6 @@ def create_sale(request):
             loan.save()
             LoanPayment.objects.create(loan=loan, amount=initial_payment, note='Initial payment during sale')
 
-        # Link sale to loan
         new_sale.loan = loan
         new_sale.save()
 

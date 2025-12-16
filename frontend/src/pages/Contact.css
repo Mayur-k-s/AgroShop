@@ -1,0 +1,45 @@
+/* Contact.css */
+
+.contact-section {
+  padding: 80px 20px;
+  background-color: #111; /* Dark background */
+  color: white;
+  text-align: center;
+}
+
+.contact-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 50px;
+  flex-wrap: wrap;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+/* Style the form inputs */
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  width: 100%;
+  max-width: 400px;
+}
+
+input, textarea {
+  padding: 15px;
+  background-color: #333;
+  border: none;
+  border-radius: 5px;
+  color: white;
+}
+
+/* Style the button */
+button {
+  padding: 15px 25px;
+  background-color: #4CAF50; /* Green */
+  color: white;
+  border: none;
+  font-weight: bold;
+  cursor: pointer;
+}
