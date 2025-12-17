@@ -153,6 +153,7 @@ def delete_customer_loans(request):
 @api_view(['GET'])
 def get_todays_report(request):
     def _calc_range(start_date, end_date):
+        # ... (keep existing _calc_range logic exactly the same) ...
         sales_qs = Sale.objects.filter(date_time__date__gte=start_date, date_time__date__lte=end_date)
         revenue = sales_qs.aggregate(Sum('total_amount'))['total_amount__sum'] or Decimal(0)
         profit = Decimal(0)
@@ -184,6 +185,7 @@ def get_todays_report(request):
         return revenue, profit, sales_qs.count(), sales_qs
 
     def _format_history(sales_qs):
+        # ... (keep existing _format_history logic exactly the same) ...
         history = []
         for sale in sales_qs.order_by('-date_time'):
             local_dt = timezone.localtime(sale.date_time)
@@ -203,7 +205,11 @@ def get_todays_report(request):
             })
         return history
 
-    today = timezone.now().date()
+    # --- FIX IS HERE ---
+    # Convert UTC 'now' to Local 'now' before getting the date
+    today = timezone.localtime(timezone.now()).date()
+    # -------------------
+    
     yesterday = today - datetime.timedelta(days=1)
     week_start = today - datetime.timedelta(days=6)
 

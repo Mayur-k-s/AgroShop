@@ -94,8 +94,92 @@ const Select = ({ children, ...props }) => (
     {children}
   </select>
 );
+// --- LANDING PAGE COMPONENT (WITH LOGIN) ---
+const LandingPage = ({ onEnter }) => {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
 
+  const handleLogin = (e) => {
+    e.preventDefault();
+    // --- SET YOUR USERNAME & PASSWORD HERE ---
+    if (username === 'mayur' && password === '1234') {
+      onEnter();
+    } else {
+      setError('Invalid Username or Password');
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-emerald-50 to-white flex flex-col items-center justify-center relative overflow-hidden font-sans selection:bg-emerald-500/20">
+      
+      {/* Background Blobs */}
+      <div className="fixed top-0 left-0 w-[500px] h-[500px] bg-emerald-300/20 rounded-full blur-[120px] pointer-events-none -translate-x-1/2 -translate-y-1/2"></div>
+      <div className="fixed bottom-0 right-0 w-[600px] h-[600px] bg-green-300/20 rounded-full blur-[150px] pointer-events-none translate-x-1/3 translate-y-1/3"></div>
+
+      {/* Main Login Card */}
+      <div className="z-10 flex flex-col items-center p-8 bg-white/60 backdrop-blur-xl border border-white/50 rounded-3xl shadow-2xl w-full max-w-md animate-fade-in-up">
+        
+        {/* Logo Icon */}
+        <div className="mb-6 relative group cursor-default">
+            <div className="absolute inset-0 bg-emerald-400 blur-xl opacity-20 rounded-full"></div>
+            <div className="relative bg-white p-4 rounded-2xl shadow-lg border border-emerald-50 text-emerald-600">
+                <Sprout size={48} strokeWidth={1.5} />
+            </div>
+        </div>
+
+        {/* Title */}
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">Raju Agro</h1>
+        <p className="text-sm text-gray-500 mb-8 font-medium">Please sign in to continue</p>
+
+        {/* Login Form */}
+        <form onSubmit={handleLogin} className="w-full space-y-4">
+            
+            {/* Username Input */}
+            <div className="space-y-1">
+                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider ml-1">Username</label>
+                <input 
+                    type="text" 
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition-all"
+                    placeholder="Enter username"
+                />
+            </div>
+
+            {/* Password Input */}
+            <div className="space-y-1">
+                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider ml-1">Password</label>
+                <input 
+                    type="password" 
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-gray-900 placeholder-gray-400 focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition-all"
+                    placeholder="Enter password"
+                />
+            </div>
+
+            {/* Error Message */}
+            {error && <p className="text-red-500 text-sm text-center font-bold">{error}</p>}
+
+            {/* Submit Button */}
+            <button 
+              type="submit"
+              className="w-full flex items-center justify-center gap-2 py-3.5 bg-gradient-to-r from-emerald-600 to-green-500 text-white rounded-xl font-bold shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all active:scale-95 mt-4"
+            >
+              <span>Login to Dashboard</span>
+              <ArrowRight size={20} />
+            </button>
+        </form>
+      </div>
+
+    </div>
+  );
+};
 function App() {
+  // --- ADD THIS LINE HERE ---
+  const [hasEntered, setHasEntered] = useState(false);
+  
   const [activeTab, setActiveTab] = useState('stock-management');
   
   // --- SEARCH STATES ---
@@ -444,12 +528,17 @@ function App() {
     { id: 'manage', label: 'Manage Items', icon: Plus },
   ];
 
-  // Logic for search bar visibility
+// Logic for search bar visibility
   const showSearchBar = ['shop', 'godown', 'khata'].includes(activeTab);
 
+  // --- ADD THIS BLOCK HERE ---
+  if (!hasEntered) {
+    return <LandingPage onEnter={() => setHasEntered(true)} />;
+  }
+  // --------------------------
+
   return (
-    <div className="flex flex-col md:flex-row min-h-screen bg-slate-50 text-gray-900 font-sans selection:bg-emerald-500/20 overflow-hidden relative print:bg-white print:text-black">
-      <CustomCursor />
+    <div className="flex flex-col md:flex-row min-h-screen bg-slate-50 ...">
       <div className="fixed top-0 left-0 w-[500px] h-[500px] bg-emerald-200/30 rounded-full blur-[120px] pointer-events-none -translate-x-1/2 -translate-y-1/2 print:hidden"></div>
       <div className="fixed bottom-0 right-0 w-[600px] h-[600px] bg-green-200/30 rounded-full blur-[150px] pointer-events-none translate-x-1/3 translate-y-1/3 print:hidden"></div>
 
