@@ -3,6 +3,7 @@ node_modules/
 .env
 backend/.env
 frontend/.env
+.env.example
 __pycache__/
 *.pyc
 .DS_Store
