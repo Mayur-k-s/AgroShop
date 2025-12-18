@@ -100,16 +100,37 @@ const LandingPage = ({ onEnter }) => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
-  const handleLogin = (e) => {
+ // INSIDE App.jsx
+
+  // --- REPLACE YOUR EXISTING handleLogin WITH THIS ---
+  const handleLogin = async (e) => {
     e.preventDefault();
-    // --- SET YOUR USERNAME & PASSWORD HERE ---
-    if (username === 'mayur' && password === '1234') {
-      onEnter();
-    } else {
-      setError('Invalid Username or Password');
+    setError(''); // Clear previous errors
+
+    try {
+      // 1. Send Username & Password to Django to get a Key
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'}/api/token/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // 2. Login Success: Save the Key (Access Token)
+        localStorage.setItem('access_token', data.access);
+        localStorage.setItem('refresh_token', data.refresh);
+        onEnter();
+      } else {
+        // 3. Login Failed
+        setError('Invalid Username or Password');
+      }
+    } catch (err) {
+      console.error(err);
+      setError('Cannot connect to Server. Is Backend running?');
     }
   };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-emerald-50 to-white flex flex-col items-center justify-center relative overflow-hidden font-sans selection:bg-emerald-500/20">
       
@@ -236,16 +257,43 @@ function App() {
    
   const API_BASE = (import.meta.env && import.meta.env.VITE_API_URL) || 'http://127.0.0.1:8000';
 
+  // INSIDE App.jsx
+
+  // --- REPLACE YOUR EXISTING apiFetch WITH THIS ---
   const apiFetch = async (path, options = {}) => {
     try {
-      const response = await fetch(`${API_BASE}${path}`, options);
+      // 1. Retrieve the "Key" from browser storage
+      const token = localStorage.getItem('access_token');
+      
+      // 2. Prepare headers with the Key
+      const headers = {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      };
+
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      // 3. Make the request
+      const response = await fetch(`${API_BASE}${path}`, { ...options, headers });
+      
+      // 4. Security Check: If the server says "401 Unauthorized" (Key expired/wrong), kick user out
+      if (response.status === 401) {
+        localStorage.removeItem('access_token'); // Clear bad key
+        setHasEntered(false); // Go back to login screen
+        return null;
+      }
+      
       if (!response.ok) return null;
+      
+      // Handle empty responses (like from delete actions)
       const contentType = response.headers.get('content-type') || '';
       if (contentType.includes('application/json')) return await response.json();
-      return null;
+      
+      return { success: true };
     } catch (e) { return null; }
   };
-
   const fmtCurrency = (value) => Number(value || 0).toFixed(2);
   const getUnit = (c) => {
     const cat = (c || '').toLowerCase();

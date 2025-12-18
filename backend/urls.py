@@ -1,9 +1,17 @@
 from django.contrib import admin
 from django.urls import path
+from django.conf import settings
+from django.conf.urls.static import static
+# --- ADD THIS IMPORT BELOW ---
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from inventory.views import *
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+
+    # --- AUTHENTICATION ENDPOINTS ---
+    path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
 
     # --- READ DATA (GET) ---
     path('api/dashboard/', api_dashboard_data),
@@ -11,10 +19,10 @@ urlpatterns = [
     path('api/godown/', get_godown_inventory),
     path('api/report/', get_todays_report),
     path('api/setup-data/', get_setup_data),
-    path('api/customers/', get_customers),       # Was missing
-    path('api/loans/', list_loans),              # Was missing
-    path('api/expenses/', get_expenses),         # Was missing
-    path('api/analysis/', get_analysis_data),    # Was missing
+    path('api/customers/', get_customers),
+    path('api/loans/', list_loans),
+    path('api/expenses/', get_expenses),
+    path('api/analysis/', get_analysis_data),
 
     # --- WRITE DATA (POST) ---
     path('api/add-category/', add_category),
@@ -29,7 +37,10 @@ urlpatterns = [
     
     # --- TRANSACTIONS & FINANCE ---
     path('api/sale/', create_sale),
-    path('api/add-expense/', add_expense),             # <--- THIS FIXES YOUR ERROR
-    path('api/loan-payment/', add_loan_payment),       # Was missing
-    path('api/delete-customer-loans/', delete_customer_loans), # Was missing
+    path('api/add-expense/', add_expense),
+    path('api/loan-payment/', add_loan_payment),
 ]
+
+# --- FORCE STATIC FILES SERVING ---
+urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

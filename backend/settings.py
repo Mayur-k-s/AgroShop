@@ -26,7 +26,8 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'unsafe-fallback-key')
 
 # SECURITY WARNING: don't run with debug turned on in production!
 # Strip spaces to ensure 'True ' becomes 'True'
-DEBUG = os.getenv('DEBUG', 'False').strip() == 'True'
+# This strips invisible spaces and handles 'True', 'true', or '1'
+DEBUG = str(os.getenv('DEBUG', 'False')).strip().lower() in ['true', '1', 't']
 
 ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
 
@@ -45,8 +46,17 @@ INSTALLED_APPS = [
     'corsheaders',
     'rest_framework',
     'inventory', 
+    'rest_framework_simplejwt',
 ]
-
+# Add this to the bottom of settings.py
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
+    ),
+}
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',  # <--- THIS IS THE MISSING KEY!
     'django.middleware.security.SecurityMiddleware',
@@ -132,4 +142,20 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 
-CORS_ALLOW_ALL_ORIGINS = True
+# --- SECURITY LOCKDOWN ---
+
+# 1. Disable Debugging (Hides secrets when errors happen)
+DEBUG = False
+
+# 2. Only allow YOUR website IP/Domain
+# (If testing locally, keep 'localhost'. When you buy a domain, add it here)
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', '[::1]']
+
+# 3. CORS: Block all other websites
+CORS_ALLOW_ALL_ORIGINS = False 
+
+# 4. Whitelist ONLY your Frontend URL
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",  # Your React Localhost
+    # "https://www.your-real-website.com",  <-- Uncomment this when you buy a domain
+]
