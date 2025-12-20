@@ -133,7 +133,7 @@ const LandingPage = ({ onEnter }) => {
   };
   return (
     <div className="min-h-screen bg-gradient-to-br from-emerald-50 to-white flex flex-col items-center justify-center relative overflow-hidden font-sans selection:bg-emerald-500/20">
-      
+      <CustomCursor />
       {/* Background Blobs */}
       <div className="fixed top-0 left-0 w-[500px] h-[500px] bg-emerald-300/20 rounded-full blur-[120px] pointer-events-none -translate-x-1/2 -translate-y-1/2"></div>
       <div className="fixed bottom-0 right-0 w-[600px] h-[600px] bg-green-300/20 rounded-full blur-[150px] pointer-events-none translate-x-1/3 translate-y-1/3"></div>
@@ -592,7 +592,7 @@ function App() {
 
       {/* WRAPPER FOR MAIN APP CONTENT */}
       <div className="flex-1 flex flex-col md:flex-row print:hidden w-full h-full overflow-hidden">
-        
+      <CustomCursor />
         {/* DESKTOP SIDEBAR */}
         <aside className="hidden md:flex w-72 sticky top-0 h-screen p-6 border-r border-gray-200 bg-white/80 backdrop-blur-xl flex-col z-40 shadow-sm">
             <div className="flex items-center gap-3 mb-10 px-2">
