@@ -27,7 +27,6 @@ def get_customers(request):
     return Response(data)
 
 @api_view(['GET'])
-@api_view(['GET'])
 def get_shop_inventory(request):
     # OPTIMIZATION: Use select_related to fetch Batch, Variant, Product, Category in 1 query
     stock_items = ShopStock.objects.select_related('batch__variant__product__category').all().order_by('-id')
@@ -50,7 +49,6 @@ def get_shop_inventory(request):
     return Response(data)
 
 @api_view(['GET'])
-@api_view(['GET'])
 def get_godown_inventory(request):
     # OPTIMIZATION: select_related for GodownStock relations
     stock_items = GodownStock.objects.select_related('batch__variant__product__category').all().order_by('-id')
@@ -72,7 +70,6 @@ def get_godown_inventory(request):
         })
     return Response(data)
 
-@api_view(['GET'])
 @api_view(['GET'])
 def list_loans(request):
     # OPTIMIZATION: prefetch related payments and sales+items to avoid N+1 loop for every loan
