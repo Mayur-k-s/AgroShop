@@ -6,7 +6,7 @@ class Category(models.Model):
     def __str__(self): return self.name
 
 class Product(models.Model):
-    name = models.CharField(max_length=200)
+    name = models.CharField(max_length=200, db_index=True)
     category = models.ForeignKey(Category, on_delete=models.CASCADE)
     manufacturer = models.CharField(max_length=200, blank=True)
     def __str__(self): return self.name
@@ -22,7 +22,7 @@ class Batch(models.Model):
     batch_number = models.CharField(max_length=100)
     purchase_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     mrp = models.DecimalField(max_digits=10, decimal_places=2)
-    expiry_date = models.DateField()
+    expiry_date = models.DateField(db_index=True)
     def __str__(self): return f"{self.batch_number}"
 
 class ShopStock(models.Model):
@@ -36,7 +36,7 @@ class GodownStock(models.Model):
 
 class Sale(models.Model):
     total_amount = models.DecimalField(max_digits=10, decimal_places=2)
-    date_time = models.DateTimeField(default=timezone.now)
+    date_time = models.DateTimeField(default=timezone.now, db_index=True)
     loan = models.ForeignKey('Loan', on_delete=models.SET_NULL, null=True, blank=True)
 
 class SaleItem(models.Model):

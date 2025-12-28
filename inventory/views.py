@@ -27,8 +27,10 @@ def get_customers(request):
     return Response(data)
 
 @api_view(['GET'])
+@api_view(['GET'])
 def get_shop_inventory(request):
-    stock_items = ShopStock.objects.all().order_by('-id')
+    # OPTIMIZATION: Use select_related to fetch Batch, Variant, Product, Category in 1 query
+    stock_items = ShopStock.objects.select_related('batch__variant__product__category').all().order_by('-id')
     data = []
     for item in stock_items:
         data.append({
@@ -48,8 +50,10 @@ def get_shop_inventory(request):
     return Response(data)
 
 @api_view(['GET'])
+@api_view(['GET'])
 def get_godown_inventory(request):
-    stock_items = GodownStock.objects.all().order_by('-id')
+    # OPTIMIZATION: select_related for GodownStock relations
+    stock_items = GodownStock.objects.select_related('batch__variant__product__category').all().order_by('-id')
     data = []
     today = timezone.now().date()
     for item in stock_items:
@@ -69,8 +73,14 @@ def get_godown_inventory(request):
     return Response(data)
 
 @api_view(['GET'])
+@api_view(['GET'])
 def list_loans(request):
-    loans = Loan.objects.order_by('-created_at')
+    # OPTIMIZATION: prefetch related payments and sales+items to avoid N+1 loop for every loan
+    loans = Loan.objects.prefetch_related(
+        'customer', 
+        'payments', 
+        'sale_set__saleitem_set'
+    ).order_by('-created_at')
     data = []
     for loan in loans:
         related_sales = Sale.objects.filter(loan=loan).order_by('-date_time')
@@ -163,7 +173,12 @@ def get_todays_report(request):
         # ... (same)
         start_dt = datetime.datetime.combine(start_date, datetime.time.min)
         end_dt = datetime.datetime.combine(end_date, datetime.time.max)
-        sales_qs = Sale.objects.filter(date_time__date__gte=start_date, date_time__date__lte=end_date)
+        # OPTIMIZATION: prefetch sale items and deep relations for report calculation
+        sales_qs = Sale.objects.filter(
+            date_time__date__gte=start_date, date_time__date__lte=end_date
+        ).prefetch_related(
+            'saleitem_set__batch__variant__product__category'
+        )
         revenue = sales_qs.aggregate(Sum('total_amount'))['total_amount__sum'] or Decimal(0)
         profit = Decimal(0)
         for sale in sales_qs:
@@ -252,7 +267,8 @@ def get_todays_report(request):
         for sale in sales_qs.order_by('-date_time'):
             local_dt = timezone.localtime(sale.date_time)
             formatted_time = local_dt.strftime("%I:%M %p")
-            items_qs = SaleItem.objects.filter(sale=sale)
+            # OPTIMIZATION: Use the prefetched relation instead of a fresh filter query
+            items_qs = sale.saleitem_set.all()
             item_names = []
             for i in items_qs:
                 p_name = i.product_name_snapshot or "Unknown"
