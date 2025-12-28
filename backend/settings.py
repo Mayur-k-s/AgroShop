@@ -157,8 +157,10 @@ CORS_ALLOW_ALL_ORIGINS = False
 
 # 4. Whitelist ONLY your Frontend URL
 # Fetch from env, default to localhost for dev
-frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:5173')
+frontend_url = os.getenv('FRONTEND_URL', '').strip()
 CORS_ALLOWED_ORIGINS = [
-    frontend_url,
     "http://localhost:5173", 
 ]
+
+if frontend_url:
+    CORS_ALLOWED_ORIGINS.append(frontend_url)
