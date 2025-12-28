@@ -487,9 +487,23 @@ def create_sale(request):
             if stock.quantity_sealed < qty_sold: raise Exception(f"Not enough sealed bags for {stock.batch.variant.product.name}")
             stock.quantity_sealed -= int(qty_sold)
 
+        # Calculate Cost Price Snapshot (Per Unit)
+        if is_loose:
+            # For loose, we need Cost Per Unit (e.g. Per Kg)
+            # Batch Price is for the whole Volume (e.g. 50kg)
+            vol = Decimal(str(stock.batch.variant.volume_value))
+            if vol > 0:
+                cost_snapshot = stock.batch.purchase_price / vol
+            else:
+                cost_snapshot = stock.batch.purchase_price # Fallback
+        else:
+            # For sealed, Cost is Per Packet (Batch Price)
+            cost_snapshot = stock.batch.purchase_price
+
         SaleItem.objects.create(
             sale=new_sale, batch=stock.batch, quantity_sold=qty_sold, 
-            selling_price=item['selling_price'], is_loose_sale=is_loose
+            selling_price=item['selling_price'], cost_price_snapshot=cost_snapshot,
+            is_loose_sale=is_loose
         )
         stock.save()
 
