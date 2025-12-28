@@ -60,6 +60,7 @@ REST_FRAMEWORK = {
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',  # <--- THIS IS THE MISSING KEY!
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware', # <--- Add Whitenoise Here
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -94,15 +95,13 @@ WSGI_APPLICATION = "backend.wsgi.application"
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
+import dj_database_url
+
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.getenv('DB_NAME'),
-        'USER': os.getenv('DB_USER'),
-        'PASSWORD': os.getenv('DB_PASSWORD'),
-        'HOST': os.getenv('DB_HOST'),
-        'PORT': '5432',
-    }
+    'default': dj_database_url.config(
+        default=f"postgres://{os.getenv('DB_USER')}:{os.getenv('DB_PASSWORD')}@{os.getenv('DB_HOST')}:5432/{os.getenv('DB_NAME')}",
+        conn_max_age=600
+    )
 }
 
 
@@ -141,6 +140,8 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = "static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 # --- SECURITY LOCKDOWN ---
 
@@ -148,14 +149,16 @@ STATIC_URL = "static/"
 DEBUG = False
 
 # 2. Only allow YOUR website IP/Domain
-# (If testing locally, keep 'localhost'. When you buy a domain, add it here)
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', '[::1]']
+# Fetch from env, default to localhost for safety if missing
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
 # 3. CORS: Block all other websites
 CORS_ALLOW_ALL_ORIGINS = False 
 
 # 4. Whitelist ONLY your Frontend URL
+# Fetch from env, default to localhost for dev
+frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:5173')
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",  # Your React Localhost
-    # "https://www.your-real-website.com",  <-- Uncomment this when you buy a domain
+    frontend_url,
+    "http://localhost:5173", 
 ]
