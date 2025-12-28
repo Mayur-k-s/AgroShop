@@ -143,12 +143,13 @@ def delete_customer_loans(request):
         return Response({'error': 'Customer not found'}, status=404)
 
     loans = Loan.objects.filter(customer=customer)
+    count = loans.count()
     for loan in loans:
         Sale.objects.filter(loan=loan).update(loan=None)
         LoanPayment.objects.filter(loan=loan).delete()
         loan.delete()
 
-    return Response({'success': True, 'deleted_loans': loans.count()})
+    return Response({'success': True, 'deleted_loans': count})
 
 @api_view(['GET'])
 def get_todays_report(request):
