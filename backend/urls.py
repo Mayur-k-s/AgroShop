@@ -39,6 +39,7 @@ urlpatterns = [
     path('api/sale/', create_sale),
     path('api/add-expense/', add_expense),
     path('api/loan-payment/', add_loan_payment),
+    path('api/delete-customer-loans/', delete_customer_loans),
 ]
 
 # --- FORCE STATIC FILES SERVING ---

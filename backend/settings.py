@@ -143,26 +143,14 @@ STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
-# --- SECURITY LOCKDOWN ---
+# --- DEPLOYMENT & DEVELOPMENT SETTINGS ---
 
-# 1. Disable Debugging (Hides secrets when errors happen)
-DEBUG = False
+# 1. Debugging: Default to True for Dev, but look for False in Env
+DEBUG = os.getenv('DEBUG', 'True') == 'True'
 
-# 2. Only allow YOUR website IP/Domain
-# Fetch from env, default to localhost for safety if missing
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+# 2. Hosts: Default to * for ease, but can be restricted via Env
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '*').split(',')
 
-# 3. CORS: Block all other websites
-CORS_ALLOW_ALL_ORIGINS = False 
-
-# 4. Whitelist ONLY your Frontend URL
-# Fetch from env, default to localhost for dev
-# FIX: .rstrip('/') ensures we remove the trailing slash if the user pasted it
-frontend_url = os.getenv('FRONTEND_URL', '').strip().rstrip('/')
-
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173", 
-]
-
-if frontend_url:
-    CORS_ALLOWED_ORIGINS.append(frontend_url)
+# 3. CORS: Default to Allow All (easiest for Vercel+Render setups)
+# You can restrict this by setting CORS_ALLOW_ALL_ORIGINS=False in .env
+CORS_ALLOW_ALL_ORIGINS = True

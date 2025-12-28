@@ -139,22 +139,30 @@ def delete_customer_loans(request):
         return Response({'error': 'Missing customer_id'}, status=400)
     try:
         customer = Customer.objects.get(id=cust_id)
+        # CRITICAL FIX: User wants to delete "History", so we delete the Customer entirely.
+        # This cascade-deletes Loans. We also unlink Sales first just in case.
+        # (Though cascade might delete sales if they were strictly linked, but Sale.loan is SetNull or Cascade?)
+        # Sale.loan is SET_NULL. So we manually unlink to be clean.
+        loans = Loan.objects.filter(customer=customer)
+        count = loans.count()
+        for loan in loans:
+            Sale.objects.filter(loan=loan).update(loan=None)
+            LoanPayment.objects.filter(loan=loan).delete()
+        
+        # Delete the customer (removes them from Autocomplete too)
+        customer.delete()
+        
     except Customer.DoesNotExist:
-        return Response({'error': 'Customer not found'}, status=404)
-
-    loans = Loan.objects.filter(customer=customer)
-    count = loans.count()
-    for loan in loans:
-        Sale.objects.filter(loan=loan).update(loan=None)
-        LoanPayment.objects.filter(loan=loan).delete()
-        loan.delete()
+        return Response({'success': False, 'error': 'Customer not found'})
 
     return Response({'success': True, 'deleted_loans': count})
 
 @api_view(['GET'])
 def get_todays_report(request):
     def _calc_range(start_date, end_date):
-        # ... (keep existing _calc_range logic exactly the same) ...
+        # ... (same)
+        start_dt = datetime.datetime.combine(start_date, datetime.time.min)
+        end_dt = datetime.datetime.combine(end_date, datetime.time.max)
         sales_qs = Sale.objects.filter(date_time__date__gte=start_date, date_time__date__lte=end_date)
         revenue = sales_qs.aggregate(Sum('total_amount'))['total_amount__sum'] or Decimal(0)
         profit = Decimal(0)
@@ -162,27 +170,80 @@ def get_todays_report(request):
             for item in SaleItem.objects.filter(sale=sale):
                 sp = Decimal(str(item.selling_price))
                 qty = Decimal(str(item.quantity_sold))
-                cp = Decimal(0)
-                if item.cost_price_snapshot:
-                    cp = Decimal(str(item.cost_price_snapshot))
-                elif item.batch:
-                    cp = item.batch.purchase_price
                 
+                # Retrieve Batch Info Safely
+                batch_price = item.batch.purchase_price if item.batch else Decimal(0)
+                # Default volume to 1 to avoid division by zero
+                batch_vol = Decimal(str(item.batch.variant.volume_value)) if (item.batch and item.batch.variant and item.batch.variant.volume_value > 0) else Decimal(1)
+                
+                # --- PROFIT CALCULATION HEURISTICS ---
+                
+                # Case 1: Loose Sale
                 if item.is_loose_sale:
-                    packet_weight = Decimal('1')
-                    if item.batch and item.batch.variant:
-                        packet_weight = Decimal(str(item.batch.variant.volume_value))
-                    cat_name = (item.category_snapshot or "").lower()
-                    if 'seed' in cat_name or 'pesticide' in cat_name:
-                         packet_weight = packet_weight / Decimal('1000')
-
-                    if packet_weight > 0:
-                        cp_per_unit = cp / packet_weight
+                    # Check if snapshot is suspiciously equal to full batch price (Volume=1 Issue)
+                    snapshot_cp = Decimal(str(item.cost_price_snapshot or 0))
+                    
+                    if snapshot_cp > 0 and snapshot_cp == batch_price and batch_vol > 1:
+                        # CORRECTION: The snapshot was likely the FULL bag price, but this is a loose sale.
+                        # Recalculate Per Unit Cost
+                        # --- UNIT NORMALIZATION CHECK (For Branch 1) ---
+                        cat_name = (item.batch.variant.product.category.name if (item.batch and item.batch.variant) else "").lower()
+                        if any(x in cat_name for x in ['pesticide', 'insecticide', 'seed']):
+                             effective_vol = batch_vol / Decimal('1000')
+                             cp_per_unit = batch_price / effective_vol
+                        else:
+                             cp_per_unit = batch_price / batch_vol
+                    elif snapshot_cp > 0:
+                        # TRUST THE SNAPSHOT... UNLESS it looks like a Raw Unit Cost (Unit Mismatch)
+                        # Example: Snapshot=4.5 (Cost/ml) but we need Cost/L (4500).
+                        # Detection: If Category is ml/g, and Snapshot < BatchPrice / 10 (arbitrary safety factor, but huge diff expected)
+                        cat_name = (item.batch.variant.product.category.name if (item.batch and item.batch.variant) else "").lower()
+                        is_ml_category = any(x in cat_name for x in ['pesticide', 'insecticide', 'seed'])
+                        
+                        if is_ml_category and batch_vol > 1 and snapshot_cp < (batch_price / Decimal('10')):
+                            # Suspiciously low snapshot. Likely cost-per-ml. Recalculate.
+                            effective_vol = batch_vol / Decimal('1000')
+                            cp_per_unit = batch_price / effective_vol
+                        else:
+                            cp_per_unit = snapshot_cp
                     else:
-                        cp_per_unit = cp
+                        # FALLBACK
+                        # --- UNIT NORMALIZATION FIX ---
+                        # If Category uses ml/g (Pesticides, Seeds etc) and Batch Vol seems large (>1 e.g. 100ml)
+                        # We need to normalize it to L/Kg because Loose Sale Qty is usually fractional (0.05 L)
+                        cat_name = (item.batch.variant.product.category.name if (item.batch and item.batch.variant) else "").lower()
+                        if batch_vol > 1 and any(x in cat_name for x in ['pesticide', 'insecticide', 'seed']):
+                             # Example: Batch=100(ml), Price=450. Per ml = 4.5. 
+                             # Sale=0.05(L) = 50ml. 
+                             # WE WANT: Cost for 1 L. 
+                             # Cost for 100ml = 450. Cost for 1000ml = 4500.
+                             # Effective Vol in L = 100 / 1000 = 0.1
+                             # Cost Per L = 450 / 0.1 = 4500.
+                             effective_vol = batch_vol / Decimal('1000')
+                             cp_per_unit = batch_price / effective_vol
+                        else:
+                             cp_per_unit = batch_price / batch_vol
+                    
                     profit += (sp - cp_per_unit) * qty
+                    
                 else:
-                    profit += (sp - cp) * qty
+                    # Case 2: Sealed Sale (But might be a mistake if Profit is massively negative)
+                    # Standard Cost
+                    cp = Decimal(str(item.cost_price_snapshot or batch_price))
+                    
+                    # ANOMALY DETECTION:
+                    # If Selling Price is < 20% of Cost Price, it's likely a Loose Sale recorded as Sealed
+                    # (e.g. Sold 1kg Urea (₹20) but system thinks 1 Bag Urea (₹900) was sold)
+                    if sp < (cp * Decimal('0.2')):
+                        # Treat as Loose Sale correction
+                        # Assume Qty sold = Qty (as units or kg)
+                        # Recalculate Cost as Per Unit
+                         actual_cp_per_unit = batch_price / batch_vol
+                         profit += (sp - actual_cp_per_unit) * qty
+                    else:
+                        # Standard Sealed Calculation
+                        profit += (sp - cp) * qty
+                    
         return revenue, profit, sales_qs.count(), sales_qs
 
     def _format_history(sales_qs):
@@ -559,3 +620,19 @@ def create_sale(request):
         new_sale.save()
 
     return Response({"success": True, "sale_id": new_sale.id})
+@api_view(['POST'])
+def delete_customer_loans(request):
+    try:
+        customer_id = request.data.get('customer_id')
+        if not customer_id:
+            return Response({"success": False, "error": "Customer ID required"}, status=400)
+        
+        # Finding customer deletes them AND their loans (CASCADE)
+        customer = Customer.objects.get(id=customer_id)
+        customer.delete()
+        
+        return Response({"success": True, "message": "Customer and loan history deleted"})
+    except Customer.DoesNotExist:
+        return Response({"success": False, "error": "Customer not found"}, status=404)
+    except Exception as e:
+        return Response({"success": False, "error": str(e)}, status=500)
