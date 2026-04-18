@@ -48,7 +48,7 @@ INSTALLED_APPS = [
     'inventory', 
     'rest_framework_simplejwt',
 ]
-# Add this to the bottom of settings.py
+# ─── Django REST Framework ───────────────────────────────────────────────────
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
@@ -56,6 +56,25 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
     ),
+
+    # ── Rate Limiting (Throttling) ──────────────────────────────────────────
+    # Uses DRF's built-in cache-based throttling (no extra packages needed).
+    # Three tiers:
+    #   login_throttle  → 5 attempts / minute per IP  (brute-force protection)
+    #   write_throttle  → 60 writes  / minute per user (sales, stock, etc.)
+    #   read_throttle   → 300 reads  / minute per user (dashboard, reports, etc.)
+    # Unauthenticated callers → 20 requests / minute per IP (global anon cap)
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon':          '20/minute',
+        'user':          '300/minute',
+        'login':         '5/minute',
+        'write':         '60/minute',
+        'read':          '300/minute',
+    },
 }
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',  # <--- THIS IS THE MISSING KEY!

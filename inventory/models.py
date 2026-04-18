@@ -93,3 +93,36 @@ class LoanPayment(models.Model):
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     note = models.CharField(max_length=200, blank=True, null=True)
     payment_date = models.DateTimeField(default=timezone.now)
+
+
+# ─── Daily Report Snapshot ────────────────────────────────────────────────────
+class DailyReport(models.Model):
+    """
+    Nightly snapshot of a completed business day.
+    Generated automatically by the `close_day` management command (runs via
+    cron at 23:59 every night) and can also be triggered manually.
+
+    Once is_finalized=True the snapshot is locked — the frontend uses this
+    record as the authoritative source so historical data is always preserved.
+    """
+    date           = models.DateField(unique=True, db_index=True)
+    generated_at   = models.DateTimeField(auto_now=True)
+    is_finalized   = models.BooleanField(default=False)   # True = nightly lock
+
+    # ── Summary figures ────────────────────────────────────────────────────
+    revenue        = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    profit         = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    total_expenses = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    net            = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    bill_count     = models.IntegerField(default=0)
+
+    # ── Full JSON breakdown ────────────────────────────────────────────────
+    sales_snapshot    = models.JSONField(default=list)   # list of sale dicts
+    expenses_snapshot = models.JSONField(default=list)   # list of expense dicts
+
+    class Meta:
+        ordering = ['-date']
+
+    def __str__(self):
+        tag = 'Finalized' if self.is_finalized else 'Draft'
+        return f"Daily Report {self.date} [{tag}]"

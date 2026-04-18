@@ -3,10 +3,11 @@ import {
   BarChart2, ShoppingCart, Archive, BookOpen, Plus, DollarSign, 
   Receipt, Sprout, Trash2, Scissors, TrendingUp, Search,
   ArrowLeft, ArrowRight, X, CheckCircle, Truck, Zap, Users, Layers,
-  Calendar, Menu, ChevronRight
+  Calendar, Menu, ChevronRight, FileText
 } from 'lucide-react';
 import CustomCursor from './CustomCursor';
 import './CustomCursor.css';
+import ReportsPage from './pages/ReportsPage';
 
 // --- HELPER: CUSTOM CSS CHART ---
 // --- HELPER: CUSTOM CSS CHART ---
@@ -519,6 +520,7 @@ function App() {
 
       const grandTotal = cart.reduce((sum, item) => sum + item.total, 0);
       setLastSale({ 
+        saleId: res.sale_id,
         items: cart, grandTotal: grandTotal, date: new Date().toLocaleString(),
         isLoan: isLoanMode, customer: isLoanMode ? { name: customerName, phone: customerPhone } : null,
         paidNow: isLoanMode ? (parseFloat(initialPayment) || 0) : grandTotal
@@ -573,6 +575,7 @@ function App() {
     { id: 'billing', label: 'POS Billing', icon: DollarSign },
     { id: 'khata', label: 'Khata Book', icon: BookOpen },
     { id: 'expenses', label: 'Expenses', icon: Receipt },
+    { id: 'reports', label: 'Reports', icon: FileText },
     { id: 'manage', label: 'Manage Items', icon: Plus },
   ];
 
@@ -1015,6 +1018,13 @@ function App() {
                 </div>
             )}
 
+            {/* --- REPORTS TAB --- */}
+            {activeTab === 'reports' && (
+              <div className="animate-fade-in">
+                <ReportsPage apiFetch={apiFetch} />
+              </div>
+            )}
+
             {/* --- MANAGE ITEMS --- */}
             {activeTab === 'manage' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-20">
@@ -1087,7 +1097,7 @@ function App() {
 
         {/* MOBILE BOTTOM NAVIGATION */}
         <nav className="md:hidden fixed bottom-0 left-0 w-full bg-white border-t border-gray-200 z-50 flex justify-around items-center px-2 py-3 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
-            {menuItems.slice(0, 5).map((item) => (
+            {menuItems.slice(0, 4).map((item) => (
                 <button 
                     key={item.id} 
                     onClick={() => setActiveTab(item.id)}
@@ -1097,6 +1107,10 @@ function App() {
                     <span className="text-[9px] font-bold">{item.label.split(' ')[0]}</span>
                 </button>
             ))}
+            <button onClick={() => setActiveTab('reports')} className={`flex flex-col items-center gap-1 ${activeTab === 'reports' ? 'text-emerald-600' : 'text-gray-400'}`}>
+                <FileText size={20} />
+                <span className="text-[9px] font-bold">Reports</span>
+            </button>
             <button onClick={() => setActiveTab('manage')} className={`flex flex-col items-center gap-1 ${['manage', 'expenses'].includes(activeTab) ? 'text-emerald-600' : 'text-gray-400'}`}>
                 <Menu size={20} />
                 <span className="text-[9px] font-bold">More</span>
@@ -1112,7 +1126,7 @@ function App() {
                   <h2 className="text-3xl font-bold text-green-800">Raju Agro</h2>
                   <p className="text-gray-600">Main Road, Tamil Nadu</p>
                   <p className="text-sm text-gray-500 mt-1">Date: {lastSale.date}</p>
-                  <p className="font-bold mt-1 text-gray-800">Bill No: {Math.floor(Math.random() * 10000)}</p>
+                  <p className="font-bold mt-1 text-gray-800">Bill No: {lastSale.saleId}</p>
                   {lastSale.isLoan && <div className="border border-red-600 p-2 mt-2 inline-block text-left text-sm bg-red-50 rounded"><p><strong>Customer:</strong> {lastSale.customer.name}</p><p><strong>Phone:</strong> {lastSale.customer.phone}</p><p className="font-bold text-red-600 mt-1">CREDIT BILL</p></div>}
               </div>
               <div className="text-left mb-4 text-sm font-mono text-gray-800">

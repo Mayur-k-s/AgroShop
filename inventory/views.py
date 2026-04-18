@@ -1,7 +1,8 @@
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, throttle_classes
 from rest_framework.response import Response
-from .models import Category, Product, ProductVariant, Batch, ShopStock, GodownStock, Sale, SaleItem, Expense
+from .models import Category, Product, ProductVariant, Batch, ShopStock, GodownStock, Sale, SaleItem, Expense, DailyReport
 from .models import Customer, Loan, LoanPayment
+from .throttles import ReadThrottle, WriteThrottle
 from django.db.models import Sum
 from django.db.models.functions import TruncYear, TruncMonth, TruncWeek
 from decimal import Decimal
@@ -12,6 +13,7 @@ import datetime
 # --- READ DATA ---
 
 @api_view(['GET'])
+@throttle_classes([ReadThrottle])
 def api_dashboard_data(request):
     return Response({
         "system_status": "Online",
@@ -20,6 +22,7 @@ def api_dashboard_data(request):
     })
 
 @api_view(['GET'])
+@throttle_classes([ReadThrottle])
 def get_customers(request):
     # Fetch all customers for POS Autocomplete
     customers = Customer.objects.all().order_by('name')
@@ -27,6 +30,7 @@ def get_customers(request):
     return Response(data)
 
 @api_view(['GET'])
+@throttle_classes([ReadThrottle])
 def get_shop_inventory(request):
     # OPTIMIZATION: Use select_related to fetch Batch, Variant, Product, Category in 1 query
     stock_items = ShopStock.objects.select_related('batch__variant__product__category').all().order_by('-id')
@@ -49,6 +53,7 @@ def get_shop_inventory(request):
     return Response(data)
 
 @api_view(['GET'])
+@throttle_classes([ReadThrottle])
 def get_godown_inventory(request):
     # OPTIMIZATION: select_related for GodownStock relations
     stock_items = GodownStock.objects.select_related('batch__variant__product__category').all().order_by('-id')
@@ -71,6 +76,7 @@ def get_godown_inventory(request):
     return Response(data)
 
 @api_view(['GET'])
+@throttle_classes([ReadThrottle])
 def list_loans(request):
     # OPTIMIZATION: prefetch related payments and sales+items to avoid N+1 loop for every loan
     loans = Loan.objects.prefetch_related(
@@ -118,6 +124,7 @@ def list_loans(request):
     return Response(data)
 
 @api_view(['POST'])
+@throttle_classes([WriteThrottle])
 def add_loan_payment(request):
     data = request.data
     loan_id = data.get('loan_id')
@@ -138,6 +145,7 @@ def add_loan_payment(request):
     return Response({'success': True, 'payment_id': payment.id, 'outstanding': loan.outstanding})
 
 @api_view(['POST'])
+@throttle_classes([WriteThrottle])
 @transaction.atomic
 def delete_customer_loans(request):
     data = request.data
@@ -165,6 +173,7 @@ def delete_customer_loans(request):
     return Response({'success': True, 'deleted_loans': count})
 
 @api_view(['GET'])
+@throttle_classes([ReadThrottle])
 def get_todays_report(request):
     def _calc_range(start_date, end_date):
         # ... (same)
@@ -315,6 +324,7 @@ def get_todays_report(request):
     })
 
 @api_view(['GET'])
+@throttle_classes([ReadThrottle])
 def get_setup_data(request):
     categories = [{"id": c.id, "name": c.name} for c in Category.objects.all()]
     products = [{"id": p.id, "name": p.name, "manufacturer": p.manufacturer} for p in Product.objects.all()]
@@ -324,6 +334,7 @@ def get_setup_data(request):
 # --- EXPENSE VIEWS ---
 
 @api_view(['GET'])
+@throttle_classes([ReadThrottle])
 def get_expenses(request):
     expenses = Expense.objects.order_by('-date')[:50]
     data = [{
@@ -333,6 +344,7 @@ def get_expenses(request):
     return Response(data)
 
 @api_view(['POST'])
+@throttle_classes([WriteThrottle])
 def add_expense(request):
     data = request.data
     Expense.objects.create(
@@ -345,6 +357,7 @@ def add_expense(request):
 # --- ANALYSIS ENGINE ---
 
 @api_view(['GET'])
+@throttle_classes([ReadThrottle])
 def get_analysis_data(request):
     year = request.GET.get('year')
     month = request.GET.get('month')
@@ -412,11 +425,13 @@ def get_analysis_data(request):
 # --- WRITE DATA ---
 
 @api_view(['POST'])
+@throttle_classes([WriteThrottle])
 def add_category(request):
     Category.objects.create(name=request.data['name'])
     return Response({"message": "Category Added!"})
 
 @api_view(['POST'])
+@throttle_classes([WriteThrottle])
 def add_product(request):
     data = request.data
     cat = Category.objects.get(id=data['category_id'])
@@ -427,6 +442,7 @@ def add_product(request):
     return Response({"message": "Product Created!"})
 
 @api_view(['POST'])
+@throttle_classes([WriteThrottle])
 def edit_product(request):
     data = request.data
     try:
@@ -446,6 +462,7 @@ def edit_product(request):
         return Response({"error": "Product not found"}, status=404)
 
 @api_view(['POST'])
+@throttle_classes([WriteThrottle])
 def delete_product(request):
     try:
         Product.objects.get(id=request.data.get('id')).delete()
@@ -454,6 +471,7 @@ def delete_product(request):
         return Response({"error": "Product not found"}, status=404)
 
 @api_view(['POST'])
+@throttle_classes([WriteThrottle])
 def delete_batch(request):
     try:
         batch = Batch.objects.get(id=request.data.get('batch_id'))
@@ -465,6 +483,7 @@ def delete_batch(request):
         return Response({"error": "Batch not found"}, status=404)
 
 @api_view(['POST'])
+@throttle_classes([WriteThrottle])
 def add_stock(request):
     data = request.data
     variant = ProductVariant.objects.get(id=data['variant_id'])
@@ -492,6 +511,7 @@ def add_stock(request):
     return Response({"message": msg})
 
 @api_view(['POST'])
+@throttle_classes([WriteThrottle])
 def transfer_stock(request):
     data = request.data
     godown_item = GodownStock.objects.get(id=data['godown_id'])
@@ -506,6 +526,7 @@ def transfer_stock(request):
     return Response({"success": True})
 
 @api_view(['POST'])
+@throttle_classes([WriteThrottle])
 def transfer_shop_to_godown(request):
     data = request.data
     shop_item_id = data.get('shop_id')
@@ -524,6 +545,7 @@ def transfer_shop_to_godown(request):
         return Response({"error": "Shop Item not found"}, status=404)
 
 @api_view(['POST'])
+@throttle_classes([WriteThrottle])
 def open_bag(request):
     data = request.data
     try:
@@ -538,6 +560,7 @@ def open_bag(request):
         return Response({"error": "Stock not found"}, status=404)
 
 @api_view(['POST'])
+@throttle_classes([WriteThrottle])
 @transaction.atomic
 def create_sale(request):
     cart_items = request.data.get('items', [])
@@ -634,6 +657,7 @@ def create_sale(request):
 
     return Response({"success": True, "sale_id": new_sale.id})
 @api_view(['POST'])
+@throttle_classes([WriteThrottle])
 def delete_customer_loans(request):
     try:
         customer_id = request.data.get('customer_id')
@@ -649,3 +673,176 @@ def delete_customer_loans(request):
         return Response({"success": False, "error": "Customer not found"}, status=404)
     except Exception as e:
         return Response({"success": False, "error": str(e)}, status=500)
+
+
+# ─── DAILY REPORT VIEWS ──────────────────────────────────────────────────────
+
+@api_view(['GET'])
+@throttle_classes([ReadThrottle])
+def get_daily_report(request):
+    """
+    Returns a full daily report for a given date.
+    Query param: ?date=YYYY-MM-DD  (defaults to today if omitted)
+
+    Priority:
+      1. If a finalized DailyReport snapshot exists in DB → serve it (fast, permanent)
+      2. Otherwise compute live from Sale/Expense records (for today or un-finalized days)
+    """
+    date_str = request.GET.get('date', None)
+
+    if date_str:
+        try:
+            report_date = datetime.date.fromisoformat(date_str)
+        except ValueError:
+            return Response({'error': 'Invalid date format. Use YYYY-MM-DD.'}, status=400)
+    else:
+        report_date = timezone.localtime(timezone.now()).date()
+
+    # ── 1. Try finalized snapshot first ───────────────────────────────────
+    stored = DailyReport.objects.filter(date=report_date, is_finalized=True).first()
+    if stored:
+        return Response({
+            'date':         stored.date.isoformat(),
+            'is_finalized': True,
+            'generated_at': stored.generated_at.isoformat(),
+            'summary': {
+                'revenue':        float(stored.revenue),
+                'profit':         float(stored.profit),
+                'bill_count':     stored.bill_count,
+                'total_expenses': float(stored.total_expenses),
+                'net':            float(stored.net),
+            },
+            'sales':    stored.sales_snapshot,
+            'expenses': stored.expenses_snapshot,
+        })
+
+    # ── 2. Compute live (today or not yet finalized) ───────────────────────
+    sales_qs = Sale.objects.filter(
+        date_time__date=report_date
+    ).prefetch_related('saleitem_set__batch__variant__product__category').order_by('date_time')
+
+    total_revenue = Decimal(0)
+    total_profit  = Decimal(0)
+    sales_data    = []
+
+    for sale in sales_qs:
+        local_dt   = timezone.localtime(sale.date_time)
+        bill_items = []
+        bill_profit = Decimal(0)
+
+        for item in sale.saleitem_set.all():
+            sp  = Decimal(str(item.selling_price))
+            qty = Decimal(str(item.quantity_sold))
+
+            batch_price = item.batch.purchase_price if item.batch else Decimal(0)
+            batch_vol   = (
+                Decimal(str(item.batch.variant.volume_value))
+                if (item.batch and item.batch.variant and item.batch.variant.volume_value > 0)
+                else Decimal(1)
+            )
+
+            if item.is_loose_sale:
+                snapshot_cp = Decimal(str(item.cost_price_snapshot or 0))
+                cp_per_unit = snapshot_cp if snapshot_cp > 0 else (batch_price / batch_vol if batch_vol > 0 else Decimal(0))
+                item_profit = (sp - cp_per_unit) * qty
+            else:
+                cp = Decimal(str(item.cost_price_snapshot or batch_price))
+                item_profit = (sp - cp) * qty
+
+            bill_profit += item_profit
+
+            unit = 'Kg' if item.is_loose_sale else 'Pkt'
+            bill_items.append({
+                'product': item.product_name_snapshot or (
+                    item.batch.variant.product.name if item.batch else 'Unknown'
+                ),
+                'variant':  item.batch.variant.size_label if item.batch else '',
+                'qty':      float(qty),
+                'unit':     unit,
+                'rate':     float(sp),
+                'total':    float(sp * qty),
+                'is_loose': item.is_loose_sale,
+            })
+
+        total_revenue += sale.total_amount
+        total_profit  += bill_profit
+
+        sales_data.append({
+            'sale_id':    sale.id,
+            'time':       local_dt.strftime('%I:%M %p'),
+            'datetime':   local_dt.isoformat(),
+            'items':      bill_items,
+            'bill_total': float(sale.total_amount),
+            'bill_profit': float(bill_profit),
+            'is_loan':    sale.loan_id is not None,
+        })
+
+    expenses_qs    = Expense.objects.filter(date__date=report_date).order_by('id')
+    total_expenses = Decimal(0)
+    expenses_data  = []
+
+    for exp in expenses_qs:
+        total_expenses += Decimal(str(exp.amount))
+        expenses_data.append({
+            'id':       exp.id,
+            'category': exp.category,
+            'note':     exp.note or '',
+            'amount':   float(exp.amount),
+            'date':     exp.date.strftime('%d-%m-%Y'),
+        })
+
+    return Response({
+        'date':         report_date.isoformat(),
+        'is_finalized': False,
+        'generated_at': None,
+        'summary': {
+            'revenue':        float(total_revenue),
+            'profit':         float(total_profit),
+            'bill_count':     len(sales_data),
+            'total_expenses': float(total_expenses),
+            'net':            float(total_revenue - total_expenses),
+        },
+        'sales':    sales_data,
+        'expenses': expenses_data,
+    })
+
+
+@api_view(['GET'])
+@throttle_classes([ReadThrottle])
+def get_report_dates(request):
+    """
+    Returns all unique dates that have data — merges finalized DB snapshots
+    with live Sale/Expense records so the folder tree is always complete.
+    """
+    from django.db.models import DateField
+    from django.db.models.functions import Cast
+
+    # Dates from stored snapshots (fastest — indexed)
+    stored_dates = set(
+        str(d) for d in DailyReport.objects.values_list('date', flat=True)
+    )
+
+    # Dates from live records (catches today and any days not yet finalized)
+    sale_dates = (
+        Sale.objects
+        .annotate(local_date=Cast('date_time', DateField()))
+        .values_list('local_date', flat=True)
+        .distinct()
+    )
+    # Expense.date is a DateTimeField — cast to date so it serialises as YYYY-MM-DD
+    expense_dates = (
+        Expense.objects
+        .annotate(local_date=Cast('date', DateField()))
+        .values_list('local_date', flat=True)
+        .distinct()
+    )
+
+    live_dates = (
+        set(str(d) for d in sale_dates if d) |
+        set(str(d) for d in expense_dates if d)
+    )
+
+    all_dates = sorted(stored_dates | live_dates, reverse=True)
+
+    return Response({'dates': all_dates})
+
