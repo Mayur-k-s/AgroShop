@@ -13,7 +13,7 @@ body {
   background-color: #4ade80; /* bright green */
   border-radius: 50%;
   z-index: 9999;
-  pointer-events: none;
+  pointer-events: none !important;
   transform: translate(-50%, -50%);
   box-shadow: 0 0 10px #4ade80;
 }
@@ -28,7 +28,7 @@ body {
   border: 1px solid rgba(74, 222, 128, 0.5); /* green opacity */
   border-radius: 50%;
   z-index: 9998;
-  pointer-events: none;
+  pointer-events: none !important;
   transform: translate(-50%, -50%);
   transition: width 0.3s, height 0.3s, background-color 0.3s;
 }

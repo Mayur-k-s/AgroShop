@@ -248,6 +248,12 @@ function App() {
   const [payAmount, setPayAmount] = useState('');
   const [payNote, setPayNote] = useState('');
 
+  // --- CUSTOM TRANSFER MODAL STATES ---
+  const [transferModalOpen, setTransferModalOpen] = useState(false);
+  const [transferItem, setTransferItem] = useState(null);
+  const [transferType, setTransferType] = useState('to-shop'); // 'to-shop' or 'to-godown'
+  const [transferQuantity, setTransferQuantity] = useState('');
+
   // --- FORM STATES ---
   const [newCat, setNewCat] = useState('');
   const [newProd, setNewProd] = useState({ name: '', manufacturer: '', size: '', category_id: '', volume: '1.0' });
@@ -541,18 +547,68 @@ function App() {
     refreshData();
   }
 
-  const handleTransfer = async (godownId, currentQty) => { 
-    const qty = prompt(`Move to SHOP? (Max: ${currentQty})`); 
-    if (!qty) return; 
-    await apiFetch('/api/transfer/', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ godown_id: godownId, quantity: qty }) }); 
-    refreshData(); 
+  const handleTransfer = (godownId, currentQty) => { 
+    const item = godownInventory.find(i => i.id === godownId); 
+    if (!item) return; 
+    setTransferItem(item); 
+    setTransferType('to-shop'); 
+    setTransferQuantity(''); 
+    setTransferModalOpen(true); 
   };
    
-  const handleReturnToGodown = async (shopId) => { 
-    const qty = prompt(`Return to GODOWN?`); 
-    if (!qty) return; 
-    await apiFetch('/api/transfer-back/', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ shop_id: shopId, quantity: qty }) }); 
-    refreshData(); 
+  const handleReturnToGodown = (shopId) => { 
+    const item = shopInventory.find(i => i.id === shopId); 
+    if (!item) return; 
+    setTransferItem(item); 
+    setTransferType('to-godown'); 
+    setTransferQuantity(''); 
+    setTransferModalOpen(true); 
+  };
+
+  const executeTransfer = async () => {
+    if (!transferItem || !transferQuantity || parseFloat(transferQuantity) <= 0) {
+      alert("Please enter a valid quantity");
+      return;
+    }
+    
+    const qty = parseFloat(transferQuantity);
+    
+    if (transferType === 'to-shop') {
+      if (qty > transferItem.quantity) {
+        alert(`Cannot transfer more than available stock (${transferItem.quantity} units)`);
+        return;
+      }
+      try {
+        await apiFetch('/api/transfer/', { 
+          method: 'POST', 
+          headers: { 'Content-Type': 'application/json' }, 
+          body: JSON.stringify({ godown_id: transferItem.id, quantity: qty }) 
+        });
+        setTransferModalOpen(false);
+        setTransferItem(null);
+        refreshData();
+      } catch (err) {
+        alert(`Transfer failed: ${err.message}`);
+      }
+    } else {
+      // to-godown
+      if (qty > transferItem.quantity_sealed) {
+        alert(`Cannot return more than available sealed stock (${transferItem.quantity_sealed} units)`);
+        return;
+      }
+      try {
+        await apiFetch('/api/transfer-back/', { 
+          method: 'POST', 
+          headers: { 'Content-Type': 'application/json' }, 
+          body: JSON.stringify({ shop_id: transferItem.id, quantity: qty }) 
+        });
+        setTransferModalOpen(false);
+        setTransferItem(null);
+        refreshData();
+      } catch (err) {
+        alert(`Return failed: ${err.message}`);
+      }
+    }
   };
    
   const handleDeleteBatch = async (batchId) => { 
@@ -1117,6 +1173,65 @@ function App() {
             </button>
         </nav>
       </div>
+
+      {/* CUSTOM STOCK TRANSFER MODAL */}
+      {transferModalOpen && transferItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
+          <GlassCard className="w-full max-w-md relative border-emerald-500/20 shadow-2xl overflow-hidden p-6">
+            <button 
+              onClick={() => { setTransferModalOpen(false); setTransferItem(null); }} 
+              className="absolute top-4 right-4 text-gray-500 hover:text-gray-900 z-50 p-2"
+            >
+              <X size={20} />
+            </button>
+            
+            <h2 className="text-xl font-bold text-gray-950 mb-2">
+              {transferType === 'to-shop' ? 'Transfer to Shop' : 'Return to Godown'}
+            </h2>
+            
+            <p className="text-xs text-gray-500 mb-4 font-semibold uppercase tracking-wider">
+              {transferItem.product_name} <span className="text-gray-400 font-normal">({transferItem.batch_no} • {transferItem.variant})</span>
+            </p>
+            
+            <div className="bg-emerald-50/70 border border-emerald-100 rounded-xl p-3 mb-4">
+              <p className="text-xs text-emerald-800 flex justify-between">
+                <span>Available Stock:</span>
+                <span className="font-bold">
+                  {transferType === 'to-shop' ? `${transferItem.quantity} Units` : `${transferItem.quantity_sealed} Sealed Units`}
+                </span>
+              </p>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block uppercase font-bold">Quantity to Move</label>
+                <Input 
+                  type="number" 
+                  placeholder="Enter quantity" 
+                  value={transferQuantity} 
+                  onChange={e => setTransferQuantity(e.target.value)} 
+                  autoFocus
+                />
+              </div>
+              
+              <div className="flex gap-3 pt-2">
+                <ActionButton 
+                  label="Cancel" 
+                  variant="secondary" 
+                  onClick={() => { setTransferModalOpen(false); setTransferItem(null); }} 
+                  className="flex-1 py-2.5 text-sm" 
+                />
+                <ActionButton 
+                  label={transferType === 'to-shop' ? 'Transfer' : 'Return'} 
+                  variant="primary" 
+                  onClick={executeTransfer} 
+                  className="flex-1 py-2.5 text-sm shadow-none" 
+                />
+              </div>
+            </div>
+          </GlassCard>
+        </div>
+      )}
 
       {/* BILL RECEIPT MODAL (SAME AS BEFORE) */}
       {lastSale && (

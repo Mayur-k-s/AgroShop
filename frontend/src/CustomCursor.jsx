@@ -59,8 +59,16 @@ const CustomCursor = () => {
 
   return (
     <>
-      <div ref={dotRef} className="cursor-dot"></div>
-      <div ref={ballRef} className="cursor-ball"></div>
+      <div 
+        ref={dotRef} 
+        className="cursor-dot" 
+        style={{ pointerEvents: 'none' }}
+      ></div>
+      <div 
+        ref={ballRef} 
+        className="cursor-ball" 
+        style={{ pointerEvents: 'none' }}
+      ></div>
     </>
   );
 };

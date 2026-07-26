@@ -814,8 +814,7 @@ def get_report_dates(request):
     Returns all unique dates that have data — merges finalized DB snapshots
     with live Sale/Expense records so the folder tree is always complete.
     """
-    from django.db.models import DateField
-    from django.db.models.functions import Cast
+    from django.db.models.functions import TruncDate
 
     # Dates from stored snapshots (fastest — indexed)
     stored_dates = set(
@@ -825,14 +824,14 @@ def get_report_dates(request):
     # Dates from live records (catches today and any days not yet finalized)
     sale_dates = (
         Sale.objects
-        .annotate(local_date=Cast('date_time', DateField()))
+        .annotate(local_date=TruncDate('date_time'))
         .values_list('local_date', flat=True)
         .distinct()
     )
-    # Expense.date is a DateTimeField — cast to date so it serialises as YYYY-MM-DD
+    # Expense.date is a DateTimeField
     expense_dates = (
         Expense.objects
-        .annotate(local_date=Cast('date', DateField()))
+        .annotate(local_date=TruncDate('date'))
         .values_list('local_date', flat=True)
         .distinct()
     )
